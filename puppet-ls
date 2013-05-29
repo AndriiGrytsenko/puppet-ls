@@ -1,0 +1,156 @@
+#!/usr/bin/env python
+
+"""
+  This program checks and prints all files that currently managed by puppet. 
+  Usage: program [-r [-d n]]  [-i] [file1,directory2,fileN]
+
+  Options:
+    -r|--recursive    - find all files recursively
+    -d|--depth        - specify the depth during recursion
+    -i|--invert-match - invert results, means print what is not managed by puppet
+ 
+  Argument:
+    file|directory    - path to destination(show current dir if not specify)
+
+  Examples:
+    # print all files managed by puppet from directory /etc with depth 1:
+    puppet-ls -r -d 1 /etc 
+
+    # print all files which arn't managed by puppet in /etc/cron.d:
+    puppet-ls -r -i /etc/cron.d
+
+  Return code:
+    0 - if found at least one file
+    1 - if nothing found
+
+  Compatibility:
+     Compatible with python 2.4.3 and higher
+
+  Author:
+     Andrii Grytsenko <andrii.grytsenko@gmail.com>
+
+  Version: 0.1
+"""
+
+
+import re
+import glob
+from optparse import OptionParser
+from os import path 
+
+class puppetLookupClass(object):
+  regexps = ['.*File\[(\/.+)\].*',
+           '.*file:\s(\/.*)'
+  ]
+
+  def __init__(self, yaml_path = '/var/lib/puppet/client_yaml/catalog/*.yaml' ):
+    self.yaml_path = yaml_path
+    self.yaml_files = glob.glob(self.yaml_path)
+    self.compiled_regexps = self.getCompiledRegexpsList()
+    self.all_puppet_files = self.getPuppetFiles()
+
+  def setRegexpsList(self,regexps):
+    """
+    This function overrides class variable regexps
+    """
+    self.regexps = regexps
+
+  def getCompiledRegexpsList(self):
+    """
+    This function returns list of compiled regexps
+    """
+    compiled_regexps = []
+    for regexp in self.regexps:
+      compiled_regexps.append(re.compile(regexp))
+
+    return compiled_regexps
+
+  def getPuppetFiles(self):
+    """
+    This function reads all yaml files from list
+    and returns all managed filenames
+    """
+    filenames = {}
+
+    for yaml_file in self.yaml_files:
+      fd = open(yaml_file, 'r')
+      for line in fd.readlines():
+        for regexp in self.compiled_regexps:
+          matched_line = regexp.match(line)
+          if matched_line:
+            filenames[matched_line.group(1)] = 1
+            continue  
+
+      fd.close()
+    return filenames
+
+  def getDstFilelist(self, directory, depth=0, max_depth=25):
+    """
+    This function builds the file tree in case of recursive flag is set
+    Default max_depth is 25
+    """
+    filelist = []
+    
+    if depth >= max_depth:
+      return []
+
+    depth += 1
+    globing = directory + "/*"
+
+    for filename in glob.glob(globing):
+      filelist.append(filename)
+      if path.isdir(filename):
+        filelist.extend(self.getDstFilelist(filename, depth, max_depth))
+
+    return filelist
+
+  def getManagedFiles(self, dst_files, invert):
+    """
+    This function mathes managed and given files and prints matches
+    """
+    result = []
+    for dst_file in dst_files:
+      if (dst_file in self.all_puppet_files.keys()) != invert:
+        result.append(dst_file)
+
+    self.managed_files = result
+    return result
+
+  def printManagedFiles(self):
+    for filename in self.managed_files:
+      print filename
+
+
+if __name__=='__main__':
+  from sys import exit, argv
+
+  usage = 'Usage: program [-r [-d n]]  [-i] [file|directory]'
+  parser = OptionParser()
+  result = False
+
+  parser.add_option("-r", "--recursive", action="store_true", dest="recursive", help="find all files recursively")
+  parser.add_option("-d", "--depth", action="store", type="int" ,dest="max_depth", default=25, help="specify the depth during recursion")
+  parser.add_option("-i", "--invert-match", action="store_true", dest="invert", default=False, help="invert results, means print what is not managed by puppet")
+
+  (options, args) = parser.parse_args()
+
+  puppet_ls = puppetLookupClass()
+  
+  dst_files = []
+
+
+  if len(args) == 0:
+    args.append(path.abspath(path.dirname(argv[0])))
+
+  for destination in args:
+    if (options.recursive == True and path.isdir(args[0])):
+      dst_files = puppet_ls.getDstFilelist(args[0], max_depth=options.max_depth) 
+    else:
+      dst_files.append(args[0].rstrip('/'))
+
+    if puppet_ls.getManagedFiles(dst_files, options.invert):
+      puppet_ls.printManagedFiles()
+      result = True
+    
+  if not result:
+    exit(1)

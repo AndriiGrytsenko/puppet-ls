@@ -1,0 +1,46 @@
+.\" Manpage for puppet-ls.
+.\" Contact andrii.grytsenko@gmail.com to correct errors or typos.
+.TH puppet-ls 8 "29 May 2013" "0.1" "man page"
+.SH NAME
+puppet-ls \- checks and prints all files that currently managed by puppet. 
+.SH SYNOPSIS
+puppet-ls [-r [-d n]]  [-i] [file1, directory2, fileN]
+.SH DESCRIPTION
+This script is helping you to figure out whether particular file or directory is managed by puppet or not.  
+
+.SH OPTIONS
+.IP "-r, --recursive"
+find all files recursively
+.IP "-d, --depth"
+specify the depth during recursion
+.IP "-i, --invert-match"
+invert results, means print what is not managed by puppet
+.IP "-h, --help"
+print help and exit
+
+.SH EXAMPLES
+
+# print all files managed by puppet from directory /etc with depth 1:
+
+puppet-ls -r -d 1 /etc 
+
+# print all files which arn't managed by puppet in /etc/cron.d:
+
+puppet-ls -r -i /etc/cron.d
+
+# print all files from list which are mananged by puppet:    
+
+puppet-ls /etc/motd.conf /etc/init.d/syslog-ng /etc/sysconfig/network
+
+.SH EXIT STATUS
+.IP "0"
+if found at least one file
+.IP "1"
+if nothing found
+
+.SH SEE ALSO
+puppet(8)
+.SH BUGS
+No known bugs.
+.SH AUTHOR
+Andrii Grytsenko (andrii.grytsenko@gmail.com)
